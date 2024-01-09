@@ -21,7 +21,7 @@
 	<p>
 		<a href="{% url 'ads:ad_create' %}">Add an Advertisement</a> |
 		{% if user.is_authenticated %}
-			<a href="{% url 'logout' %}?next={% url 'aads:all' %}">Logout</a>
+			<a href="{% url 'logout' %}?next={% url 'ads:all' %}">Logout</a>
 		{% else %}
 			<a href="{% url 'login' %}?next={% url 'ads:all' %}">Login</a>
 		{% endif %}
