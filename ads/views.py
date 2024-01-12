@@ -1,4 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.humanize.templatetags.humanize import naturaltime
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
@@ -21,16 +23,36 @@ class AdListView(OwnerListView):
     template_name = "ads/ad_list.html"
 
     def get(self, request):
-        ads = Ad.objects.all()
         favs = list()
         if request.user.is_authenticated:
             # rows = [{'id': 2}, {'id': 4} ... ]  (A list of rows)
             rows = request.user.favorites_ads.values('id')
             favs = [row['id'] for row in rows]
 
-        ctx = {'ad_list': ads, 'favorites': favs}
+        ads, search = self.search(request)
+        ctx = {'ad_list': ads, 'favorites': favs, 'search': search}
 
         return render(request, self.template_name, ctx)
+
+    def search(self, request_obj):
+        search_val = request_obj.GET.get('search', False)
+        if search_val:
+            # Simple title-only search
+            # objects = Post.objects.filter(title__contains=strval).select_related().distinct().order_by('-updated_at')[:10]
+
+            # Multi-field search
+            # __icontains for case-insensitive search
+            query = Q(title__icontains=search_val)
+            query.add(Q(text__icontains=search_val), Q.OR)
+            ads_list = Ad.objects.filter(query).select_related().distinct().order_by('-updated_at')[:10]
+        else:
+            ads_list = Ad.objects.all().order_by('-updated_at')[:10]
+
+        # Augment the post_list
+        for obj in ads_list:
+            obj.natural_updated = naturaltime(obj.updated_at)
+
+        return ads_list, search_val
 
 
 class AdDetailView(OwnerDetailView):
@@ -64,9 +86,11 @@ class AdCreateView(LoginRequiredMixin, View):
 
             return render(request, self.template_name, ctx)
 
-        picture = form.save(commit=False)
-        picture.owner = self.request.user
-        picture.save()
+        ad_with_picture_or_not = form.save(commit=False)
+        ad_with_picture_or_not.owner = self.request.user
+        ad_with_picture_or_not.save()
+
+        form.save_m2m()
 
         return redirect(self.success_url)
 
@@ -93,6 +117,8 @@ class AdUpdateView(LoginRequiredMixin, View):
 
         ad = form.save(commit=False)
         ad.save()
+
+        form.save_m2m()
 
         return redirect(self.success_url)
 
